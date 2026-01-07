@@ -9,13 +9,14 @@ cd "$REPO_DIR"
 
 # Create virtual environment if it doesn't exist
 if [ ! -d "$VENV_DIR" ]; then
-    echo "Creating Python virtual environment..."
+    #echo "Creating Python virtual environment..."
     python3 -m venv venv
 else
-    echo "Virtual environment already exists."
+    #echo "Virtual environment already exists."
 fi
 
 # Activate virtual environment
 source venv/bin/activate
 # Launch the service
-python3 restapi.py
+python3 restapi.py &> log.txt %
+

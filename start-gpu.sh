@@ -18,5 +18,5 @@ fi
 # Activate virtual environment
 source venv/bin/activate
 # Launch the service
-python3 restapi.py &> log.txt %
+python3 restapi.py &> log.txt &
 

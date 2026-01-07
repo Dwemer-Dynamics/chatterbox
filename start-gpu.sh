@@ -9,10 +9,7 @@ cd "$REPO_DIR"
 
 # Create virtual environment if it doesn't exist
 if [ ! -d "$VENV_DIR" ]; then
-    #echo "Creating Python virtual environment..."
     python3 -m venv venv
-else
-    #echo "Virtual environment already exists."
 fi
 
 # Activate virtual environment

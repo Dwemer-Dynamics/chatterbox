@@ -8,6 +8,10 @@ REPO_DIR="$BASE_DIR/chatterbox"
 VENV_DIR="$REPO_DIR/venv"
 
 echo "=== CHIM Chatterbox setup ==="
+echo ""
+echo "NOTE: Chatterbox and CHIM XTTS use the same port (8020)."
+echo "      Only one can be enabled at a time."
+echo ""
 
 # Ensure base directory exists
 mkdir -p "$BASE_DIR"

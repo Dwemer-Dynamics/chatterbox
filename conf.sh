@@ -1,24 +1,30 @@
 #!/bin/bash
+clear
+cat << EOF
+Chatterbox TTS
+
+This will configure the Chatterbox TTS (Text-to-Speech) service.
+
+Chatterbox is an optimized fork of XTTS with faster inference and improved performance.
+
+Options:
+* GPU = Uses GPU acceleration for faster inference. Recommended for NVIDIA cards.
+* CPU = Runs on CPU only. Use this for AMD cards or systems without GPU support.
+
+Recommended to use GPU if you have an NVIDIA GPU.
+
+EOF
 
 if [ ! -d /home/dwemer/chatterbox ]; then
-        exit "chatterbox not installed"
+        echo "Error: Chatterbox not installed"
+        exit 1
 fi
 
-mapfile -t files < <(find /home/dwemer/chatterbox/ -name "start-*.sh")
-# Check if any files were found
-
-if [ ${#files[@]} -eq 0 ]; then
-    echo "No files found matching the pattern."
-    exit 1
-fi
-
-# Display the files in a numbered list
-echo -e "Select a an option from the list:\n\n"
-for i in "${!files[@]}"; do
-    echo "$((i+1)). ${files[$i]}"
-done
-
-echo "0. Disable service";
+echo "Select an option from the list:"
+echo
+echo "1. Enable service (GPU)"
+echo "2. Enable service (CPU)"
+echo "0. Disable service"
 echo
 
 # Prompt the user to make a selection
@@ -27,23 +33,23 @@ read -p "Select an option by picking the matching number: " selection
 # Validate the input
 
 if [ "$selection" -eq "0" ]; then
-    echo "Disabling service. Run this again to enable"
+    echo "Disabling service. Run this again to enable it"
     rm /home/dwemer/chatterbox/start.sh &>/dev/null
     exit 0
 fi
 
-if ! [[ "$selection" =~ ^[0-9]+$ ]] || [ "$selection" -lt 1 ] || [ "$selection" -gt ${#files[@]} ]; then
-    echo "Invalid selection."
-    exit 1
+if [ "$selection" -eq "1" ]; then
+    ln -sf /home/dwemer/chatterbox/start-gpu.sh /home/dwemer/chatterbox/start.sh
+    echo "✓ Chatterbox enabled with GPU acceleration"
+    exit 0
 fi
 
-# Get the selected file
-selected_file="${files[$((selection-1))]}"
+if [ "$selection" -eq "2" ]; then
+    ln -sf /home/dwemer/chatterbox/start-cpu.sh /home/dwemer/chatterbox/start.sh
+    echo "✓ Chatterbox enabled with CPU mode"
+    exit 0
+fi
 
-echo "You selected: $selected_file"
+echo "Invalid selection."
+exit 1
 
-ln -sf $selected_file /home/dwemer/chatterbox/start.sh
-
-
-# Ensure all start scripts are executable
-chmod +x /home/dwemer/xtts-api-server/start-*.sh 2>/dev/null || true

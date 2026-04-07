@@ -64,5 +64,12 @@ echo
 echo "Press ENTER to continue"
 read
 
+# Enable Chatterbox automatically after install (GPU mode).
+# This creates the start.sh marker used by DwemerDistro startup and
+# "Configure Installed Components" status checks.
+ln -sf "$REPO_DIR/start-gpu.sh" "$REPO_DIR/start.sh"
+chmod +x "$REPO_DIR/start-gpu.sh" "$REPO_DIR/start.sh"
+echo "Chatterbox service enabled (GPU mode)."
+
 # Launch the service
 python3 restapi.py

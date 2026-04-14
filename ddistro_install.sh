@@ -49,10 +49,31 @@ pip install uvicorn fastapi
 # Hugging Face login
 echo
 echo "=== Hugging Face Authentication ==="
-echo "You may be prompted to log in to Hugging Face."
+echo "Enter your Hugging Face token below."
 echo "This is required to download certain models."
 echo
-hf auth login
+
+if hf auth whoami >/dev/null 2>&1; then
+    echo "Hugging Face is already authenticated on this machine."
+else
+    while true; do
+        read -r -p "Hugging Face token (type 'skip' to continue without logging in): " HF_TOKEN_INPUT
+
+        if [ "$HF_TOKEN_INPUT" = "skip" ]; then
+            echo "Skipping Hugging Face login. Model downloads may fail until you log in."
+            break
+        fi
+
+        if [ -z "$HF_TOKEN_INPUT" ]; then
+            echo "No token entered. Please paste a token or type 'skip'."
+            continue
+        fi
+
+        python3 -c "from huggingface_hub import login; import sys; login(token=sys.stdin.readline().strip(), add_to_git_credential=False)" <<< "$HF_TOKEN_INPUT"
+        unset HF_TOKEN_INPUT
+        break
+    done
+fi
 
 # User notice before launching service
 echo

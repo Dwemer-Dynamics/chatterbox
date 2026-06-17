@@ -8,10 +8,10 @@ This will configure the Chatterbox TTS (Text-to-Speech) service.
 Chatterbox is an optimized fork of XTTS with faster inference and improved performance.
 
 Options:
-* GPU = Uses GPU acceleration for faster inference. Recommended for NVIDIA cards.
+* GPU / CUDA = Uses GPU acceleration for faster inference. Recommended for NVIDIA cards.
 * CPU = Runs on CPU only. Use this for AMD cards or systems without GPU support.
 
-Recommended to use GPU if you have an NVIDIA GPU.
+Recommended to use GPU / CUDA if you have an NVIDIA GPU.
 
 EOF
 
@@ -22,7 +22,7 @@ fi
 
 echo "Select an option from the list:"
 echo
-echo "1. Enable service (GPU)"
+echo "1. Enable service (GPU / CUDA)"
 echo "2. Enable service (CPU)"
 echo "0. Disable service"
 echo
@@ -40,16 +40,15 @@ fi
 
 if [ "$selection" -eq "1" ]; then
     ln -sf /home/dwemer/chatterbox/start-gpu.sh /home/dwemer/chatterbox/start.sh
-    echo "✓ Chatterbox enabled with GPU acceleration"
+    echo "[OK] Chatterbox enabled with GPU / CUDA mode"
     exit 0
 fi
 
 if [ "$selection" -eq "2" ]; then
     ln -sf /home/dwemer/chatterbox/start-cpu.sh /home/dwemer/chatterbox/start.sh
-    echo "✓ Chatterbox enabled with CPU mode"
+    echo "[OK] Chatterbox enabled with CPU mode"
     exit 0
 fi
 
 echo "Invalid selection."
 exit 1
-

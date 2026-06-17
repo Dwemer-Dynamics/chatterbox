@@ -77,7 +77,7 @@ fi
 
 # User notice before launching service
 echo
-echo "This will start CHIM XTTS to download the selected model"
+echo "This will start CHIM Chatterbox to download the selected model"
 echo "Wait for the message:"
 echo "  'Uvicorn running on http://0.0.0.0:8020 (Press CTRL+C to quit)'"
 echo "Then close this window."
@@ -85,12 +85,12 @@ echo
 echo "Press ENTER to continue"
 read
 
-# Enable Chatterbox automatically after install (GPU mode).
+# Enable Chatterbox automatically after install (GPU / CUDA mode).
 # This creates the start.sh marker used by DwemerDistro startup and
 # "Configure Installed Components" status checks.
 ln -sf "$REPO_DIR/start-gpu.sh" "$REPO_DIR/start.sh"
 chmod +x "$REPO_DIR/start-gpu.sh" "$REPO_DIR/start.sh"
-echo "Chatterbox service enabled (GPU mode)."
+echo "Chatterbox service enabled (GPU / CUDA mode)."
 
 # Launch the service
 python3 restapi.py

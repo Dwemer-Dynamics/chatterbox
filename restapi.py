@@ -1,4 +1,4 @@
-from fastapi import FastAPI, UploadFile, File, HTTPException
+from fastapi import FastAPI, UploadFile, File, Form, HTTPException
 from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel
 import torchaudio as ta
@@ -10,6 +10,9 @@ from pathlib import Path
 from typing import List, Dict
 import uuid
 import io
+from threading import RLock
+
+from voice_management import delete_voice_artifacts, normalize_voice_id
 
 
 app = FastAPI(title="Chatterbox TTS API", version="0.1.0")
@@ -20,6 +23,7 @@ model = ChatterboxTurboTTS.from_pretrained(device=DEVICE)
 
 VOICE_DIR = Path("voices")
 VOICE_DIR.mkdir(exist_ok=True)
+VOICE_LOCK = RLock()
 
 
 # Pydantic models for request/response
@@ -78,7 +82,9 @@ async def get_speakers_list_extended():
             speakers.append({
                 "voice_id": voice_id,
                 "wav_file": wav_file.name,
-                "has_conditionals": cond_file.exists()
+                "has_conditionals": cond_file.exists(),
+                "can_delete": True,
+                "source": "uploaded_sample",
             })
     
     return {"speakers": speakers, "count": len(speakers)}
@@ -107,36 +113,77 @@ async def get_sample(file_name: str):
 # ============= POST ENDPOINTS =============
 
 @app.post("/upload_sample")
-async def upload_sample(wavFile: UploadFile = File(...)):
+async def upload_sample(
+    wavFile: UploadFile = File(...),
+    force: bool = Form(default=False),
+):
     """Upload a voice sample to be used as a speaker reference."""
     start_time = time.time()
     
     # Validate file type
-    if not wavFile.filename.endswith('.wav'):
+    if not wavFile.filename or not wavFile.filename.lower().endswith('.wav'):
         raise HTTPException(status_code=400, detail="Only .wav files are supported")
-    
-    # Use original filename (without .wav extension) as voice_id
-    voice_id = wavFile.filename[:-4] if wavFile.filename.endswith('.wav') else wavFile.filename
-    wav_path = VOICE_DIR / f"{voice_id}.wav"
-    cond_path = VOICE_DIR / f"{voice_id}.pt"
-    
-    # Check if voice already exists
-    if wav_path.exists():
-        raise HTTPException(status_code=400, detail=f"Voice '{voice_id}' already exists. Please use a different filename.")
 
     try:
-        # Save wav file
-        with open(wav_path, "wb") as f:
-            content = await wavFile.read()
-            f.write(content)
+        voice_id = normalize_voice_id(wavFile.filename)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
-        # Build conditionals
-        cond_start = time.time()
-        model.prepare_conditionals(str(wav_path))
-        cond_time = time.time() - cond_start
+    wav_path = VOICE_DIR / f"{voice_id}.wav"
+    cond_path = VOICE_DIR / f"{voice_id}.pt"
 
-        # Save conditionals
-        model.conds.save(cond_path)
+    content = await wavFile.read()
+    if not content:
+        raise HTTPException(status_code=400, detail="Uploaded WAV is empty")
+
+    temp_token = uuid.uuid4().hex
+    temp_wav_path = VOICE_DIR / f".upload-{temp_token}.wav"
+    temp_cond_path = VOICE_DIR / f".upload-{temp_token}.pt"
+    backup_wav_path = VOICE_DIR / f".backup-{temp_token}.wav"
+    backup_cond_path = VOICE_DIR / f".backup-{temp_token}.pt"
+    replaced = False
+
+    try:
+        with VOICE_LOCK:
+            replaced = wav_path.exists()
+            if replaced and not force:
+                raise HTTPException(
+                    status_code=409,
+                    detail=f"Voice '{voice_id}' already exists. Set force=true to replace it.",
+                )
+
+            temp_wav_path.write_bytes(content)
+            cond_start = time.time()
+            model.prepare_conditionals(str(temp_wav_path))
+            cond_time = time.time() - cond_start
+            model.conds.save(temp_cond_path)
+            wav_backed_up = False
+            cond_backed_up = False
+            wav_installed = False
+            cond_installed = False
+            try:
+                if wav_path.exists():
+                    os.replace(wav_path, backup_wav_path)
+                    wav_backed_up = True
+                if cond_path.exists():
+                    os.replace(cond_path, backup_cond_path)
+                    cond_backed_up = True
+                os.replace(temp_wav_path, wav_path)
+                wav_installed = True
+                os.replace(temp_cond_path, cond_path)
+                cond_installed = True
+            except Exception:
+                if wav_installed and wav_path.exists():
+                    wav_path.unlink()
+                if cond_installed and cond_path.exists():
+                    cond_path.unlink()
+                if wav_backed_up and backup_wav_path.exists():
+                    os.replace(backup_wav_path, wav_path)
+                if cond_backed_up and backup_cond_path.exists():
+                    os.replace(backup_cond_path, cond_path)
+                raise
+            backup_wav_path.unlink(missing_ok=True)
+            backup_cond_path.unlink(missing_ok=True)
 
         total_time = time.time() - start_time
         
@@ -149,20 +196,40 @@ async def upload_sample(wavFile: UploadFile = File(...)):
             "voice_id": voice_id,
             "wav_file": wav_path.name,
             "original_filename": wavFile.filename,
+            "replaced": replaced,
             "inference_time": {
                 "conditional_preparation": f"{cond_time:.3f}s",
                 "total": f"{total_time:.3f}s"
             }
         }
     
+    except HTTPException:
+        raise
     except Exception as e:
-        # Cleanup on error
-        if wav_path.exists():
-            os.remove(wav_path)
-        if cond_path.exists():
-            os.remove(cond_path)
-        
         raise HTTPException(status_code=500, detail=f"Error processing upload: {str(e)}")
+    finally:
+        for temp_path in (temp_wav_path, temp_cond_path):
+            if temp_path.exists():
+                temp_path.unlink()
+
+
+@app.delete("/voices/{voice_id}")
+async def delete_voice(voice_id: str):
+    try:
+        normalized = normalize_voice_id(voice_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    with VOICE_LOCK:
+        removed = delete_voice_artifacts(VOICE_DIR, normalized)
+    if not removed:
+        raise HTTPException(status_code=404, detail=f"Voice '{normalized}' was not found")
+    return {
+        "status": "deleted",
+        "voice_id": normalized,
+        "removed": removed,
+        "cache_invalidated": True,
+    }
 
 
 @app.post("/tts_to_audio/")
@@ -190,33 +257,38 @@ async def tts_to_audio(request: SynthesisRequest):
     if voice_id.endswith('.wav'):
         voice_id = voice_id[:-4]  # Remove .wav extension
     
+    try:
+        voice_id = normalize_voice_id(voice_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
     wav_path = VOICE_DIR / f"{voice_id}.wav"
-    
-    if not wav_path.exists():
-        raise HTTPException(
-            status_code=404,
-            detail=f"Voice audio file for '{voice_id}' not found"
-        )
 
     try:
-        # Prepare conditionals (compute on the fly, exaggeration can be changed per request)
-        cond_start = time.time()
-        model.prepare_conditionals(str(wav_path), exaggeration=request.exaggeration)
-        cond_time = time.time() - cond_start
+        with VOICE_LOCK:
+            if not wav_path.exists():
+                raise HTTPException(
+                    status_code=404,
+                    detail=f"Voice audio file for '{voice_id}' not found"
+                )
 
-        # Generate audio
-        gen_start = time.time()
-        wav = model.generate(
-            request.text,
-            repetition_penalty=request.repetition_penalty,
-            min_p=request.min_p,
-            top_p=request.top_p,
-            exaggeration=request.exaggeration,
-            cfg_weight=request.cfg_weight,
-            temperature=request.temperature,
-            top_k=request.top_k
-        )
-        gen_time = time.time() - gen_start
+            # Prepare conditionals and generate while deletion/replacement is excluded.
+            cond_start = time.time()
+            model.prepare_conditionals(str(wav_path), exaggeration=request.exaggeration)
+            cond_time = time.time() - cond_start
+
+            gen_start = time.time()
+            wav = model.generate(
+                request.text,
+                repetition_penalty=request.repetition_penalty,
+                min_p=request.min_p,
+                top_p=request.top_p,
+                exaggeration=request.exaggeration,
+                cfg_weight=request.cfg_weight,
+                temperature=request.temperature,
+                top_k=request.top_k
+            )
+            gen_time = time.time() - gen_start
 
         # Convert to bytes for streaming
         save_start = time.time()
@@ -242,6 +314,8 @@ async def tts_to_audio(request: SynthesisRequest):
             }
         )
     
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error generating audio: {str(e)}")
 

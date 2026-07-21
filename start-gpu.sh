@@ -14,6 +14,12 @@ fi
 
 # Activate virtual environment
 source venv/bin/activate
+if [ -f /etc/dwemerdistro_services.conf ]; then
+    # shellcheck disable=SC1091
+    source /etc/dwemerdistro_services.conf
+fi
+export CHATTERBOX_HOST="${CHATTERBOX_HOST:-0.0.0.0}"
+export CHATTERBOX_PORT="${CHATTERBOX_PORT:-8023}"
 # Launch the service
 python3 restapi.py &> log.txt &
 

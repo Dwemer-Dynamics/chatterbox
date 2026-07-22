@@ -16,7 +16,9 @@ from voice_management import delete_voice_artifacts, normalize_voice_id
 
 
 SERVICE_HOST = os.environ.get("CHATTERBOX_HOST", "0.0.0.0")
-SERVICE_PORT = int(os.environ.get("CHATTERBOX_PORT", "8023"))
+# Keep the code-level fallback on the released shared port. DwemerDistro writes
+# .dwemerdistro-port for fresh installs and explicit migrations.
+SERVICE_PORT = int(os.environ.get("CHATTERBOX_PORT", "8020"))
 
 app = FastAPI(title="Chatterbox TTS API", version="0.1.0")
 

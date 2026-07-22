@@ -15,6 +15,11 @@ from threading import RLock
 from voice_management import delete_voice_artifacts, normalize_voice_id
 
 
+SERVICE_HOST = os.environ.get("CHATTERBOX_HOST", "0.0.0.0")
+# Keep the code-level fallback on the released shared port. DwemerDistro writes
+# .dwemerdistro-port for fresh installs and explicit migrations.
+SERVICE_PORT = int(os.environ.get("CHATTERBOX_PORT", "8020"))
+
 app = FastAPI(title="Chatterbox TTS API", version="0.1.0")
 
 # Load model once at startup
@@ -327,12 +332,22 @@ def health():
     """Health check endpoint."""
     return {
         "status": "ok",
+        "provider": "chatterbox",
+        "runtime": "python",
+        "api_family": "xtts-compatible",
+        "port": SERVICE_PORT,
         "device": DEVICE,
         "model_loaded": model is not None,
         "voice_directory": str(VOICE_DIR)
     }
 
 
+@app.get("/provider_info")
+def provider_info():
+    """Stable provider identity for DwemerDistro discovery UIs."""
+    return health()
+
+
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8020)
+    uvicorn.run(app, host=SERVICE_HOST, port=SERVICE_PORT)

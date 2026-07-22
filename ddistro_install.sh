@@ -6,12 +6,14 @@ BASE_DIR="/home/dwemer"
 REPO_URL="https://github.com/Dwemer-Dynamics/chatterbox"
 REPO_DIR="$BASE_DIR/chatterbox"
 VENV_DIR="$REPO_DIR/venv"
+PORT_FILE="$REPO_DIR/.dwemerdistro-port"
+FRESH_INSTALL=0
+
+if [ ! -d "$VENV_DIR" ]; then
+    FRESH_INSTALL=1
+fi
 
 echo "=== CHIM Chatterbox setup ==="
-echo ""
-echo "NOTE: Chatterbox and CHIM XTTS use the same port (8020)."
-echo "      Only one can be enabled at a time."
-echo ""
 
 # Ensure base directory exists
 mkdir -p "$BASE_DIR"
@@ -28,6 +30,26 @@ else
 fi
 
 cd "$REPO_DIR"
+
+# Existing installs stay on the historical shared port unless the user has
+# explicitly migrated them. Fresh installs get the dedicated port.
+if [ ! -f "$PORT_FILE" ]; then
+    if [ "$FRESH_INSTALL" -eq 1 ]; then
+        printf '8023\n' > "$PORT_FILE"
+    else
+        printf '8020\n' > "$PORT_FILE"
+    fi
+fi
+CHATTERBOX_PORT="${CHATTERBOX_PORT:-$(tr -d '[:space:]' < "$PORT_FILE")}"
+case "$CHATTERBOX_PORT" in
+    ''|*[!0-9]*) CHATTERBOX_PORT=8020 ;;
+esac
+export CHATTERBOX_PORT
+
+echo ""
+echo "Chatterbox will use port $CHATTERBOX_PORT."
+echo "XTTS remains on port 8020."
+echo ""
 
 # Create virtual environment if it doesn't exist
 if [ ! -d "$VENV_DIR" ]; then
@@ -79,7 +101,7 @@ fi
 echo
 echo "This will start CHIM Chatterbox to download the selected model"
 echo "Wait for the message:"
-echo "  'Uvicorn running on http://0.0.0.0:8020 (Press CTRL+C to quit)'"
+echo "  'Uvicorn running on http://0.0.0.0:$CHATTERBOX_PORT (Press CTRL+C to quit)'"
 echo "Then close this window."
 echo
 echo "Press ENTER to continue"

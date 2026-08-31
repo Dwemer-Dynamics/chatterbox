@@ -1,6 +1,8 @@
 #!/bin/bash
 
 set -e  # Exit immediately if a command fails
+export PIP_NO_CACHE_DIR=1
+export PIP_DISABLE_PIP_VERSION_CHECK=1
 
 BASE_DIR="/home/dwemer"
 REPO_URL="https://github.com/Dwemer-Dynamics/chatterbox"
@@ -22,7 +24,7 @@ cd "$BASE_DIR"
 # Clone or update repository
 if [ ! -d "$REPO_DIR" ]; then
     echo "Cloning Chatterbox repository..."
-    git clone "$REPO_URL"
+    git clone --depth 1 "$REPO_URL"
 else
     echo "Repository already exists, pulling latest changes..."
     cd "$REPO_DIR"
@@ -64,9 +66,9 @@ source venv/bin/activate
 
 # Upgrade pip and install dependencies
 echo "Installing dependencies..."
-pip install --upgrade pip
-pip install -e .
-pip install uvicorn fastapi
+python -m pip install --no-cache-dir --upgrade pip
+python -m pip install --no-cache-dir -e .
+python -m pip install --no-cache-dir uvicorn fastapi
 
 # Hugging Face login
 echo

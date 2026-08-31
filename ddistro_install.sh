@@ -76,7 +76,7 @@ pytorch_gpu_available() {
 
 # Upgrade pip and install dependencies
 echo "Installing dependencies..."
-python -m pip install --no-cache-dir --upgrade pip setuptools wheel
+python -m pip install --no-cache-dir --upgrade pip 'setuptools<81' wheel
 if pytorch_gpu_available; then
     python -m pip install --no-cache-dir torch==2.6.0 torchaudio==2.6.0 --index-url https://download.pytorch.org/whl/cu126
 else

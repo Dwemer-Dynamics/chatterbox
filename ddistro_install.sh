@@ -1,6 +1,8 @@
 #!/bin/bash
 
 set -e  # Exit immediately if a command fails
+export PIP_NO_CACHE_DIR=1
+export PIP_DISABLE_PIP_VERSION_CHECK=1
 
 BASE_DIR="/home/dwemer"
 REPO_URL="https://github.com/Dwemer-Dynamics/chatterbox"
@@ -22,7 +24,7 @@ cd "$BASE_DIR"
 # Clone or update repository
 if [ ! -d "$REPO_DIR" ]; then
     echo "Cloning Chatterbox repository..."
-    git clone "$REPO_URL"
+    git clone --depth 1 "$REPO_URL"
 else
     echo "Repository already exists, pulling latest changes..."
     cd "$REPO_DIR"
@@ -62,11 +64,26 @@ fi
 # Activate virtual environment
 source venv/bin/activate
 
+# Use DwemerDistro's validated CUDA selection; otherwise keep this environment CPU-only.
+pytorch_gpu_available() {
+    local cuda_home
+
+    [ -r /var/lib/dwemerdistro/cuda-selection.env ] || return 1
+    grep -qx 'CUDA_PYTORCH_SUPPORTED=1' /var/lib/dwemerdistro/cuda-selection.env || return 1
+    cuda_home="$(sed -n 's|^CUDA_HOME=\(/usr/local/cuda-\(12\.8\|13\.0\)\)$|\1|p' /var/lib/dwemerdistro/cuda-selection.env | head -n 1)"
+    [ -n "$cuda_home" ] && [ -x "$cuda_home/bin/nvcc" ]
+}
+
 # Upgrade pip and install dependencies
 echo "Installing dependencies..."
-pip install --upgrade pip
-pip install -e .
-pip install uvicorn fastapi
+python -m pip install --no-cache-dir --upgrade pip 'setuptools<81' wheel
+if pytorch_gpu_available; then
+    python -m pip install --no-cache-dir torch==2.6.0 torchaudio==2.6.0 --index-url https://download.pytorch.org/whl/cu126
+else
+    python -m pip install --no-cache-dir torch==2.6.0 torchaudio==2.6.0 --index-url https://download.pytorch.org/whl/cpu
+fi
+python -m pip install --no-cache-dir -e .
+python -m pip install --no-cache-dir uvicorn fastapi
 
 # Hugging Face login
 echo
